@@ -98,21 +98,23 @@ program
     // Health calculation
     // --------------------------------
 
-    const health = calculateHealth({
-      unusedDependencies:
-        dependencyAnalysis.unusedDependencies.length,
+    const failedChecks = projectChecks.filter(
+  (check) => !check.passed,
+).length;
 
-      unusedDevDependencies:
-        dependencyAnalysis.unusedDevDependencies.length,
+const health = calculateHealth({
+  unusedDependencies:
+    dependencyAnalysis.unusedDependencies.length,
 
-      vulnerabilities:
-        securityAnalysis.vulnerabilities,
-    });
+  unusedDevDependencies:
+    dependencyAnalysis.unusedDevDependencies.length,
 
-    // --------------------------------
+  vulnerabilities:
+    securityAnalysis.vulnerabilities,
+
+  failedChecks,
+});
     // Collect report data
-    // --------------------------------
-
     const reportData = {
       project,
       packageJson,
@@ -122,11 +124,7 @@ program
       securityAnalysis,
       health,
     };
-
-    // --------------------------------
     // Generate report
-    // --------------------------------
-
     if (options.json) {
       printJsonReport(reportData);
     } else {

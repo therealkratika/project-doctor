@@ -251,7 +251,19 @@ export function printReport(data: ReporterData): void {
   console.log(
     `   ${scoreColor(`${health.score}/100`)} — ${health.status}`,
   );
+const failedChecks = projectChecks.filter(
+  (check) => !check.passed,
+);
 
+if (failedChecks.length > 0) {
+  console.log(chalk.bold("\n⚠ Issues"));
+
+  for (const check of failedChecks) {
+    console.log(
+      chalk.yellow(`   • ${check.message}`),
+    );
+  }
+}
   // --------------------------------
   // Footer
   // --------------------------------

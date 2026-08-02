@@ -1,46 +1,76 @@
-export interface HealthResult {
+interface HealthInput {
+  unusedDependencies: number;
+  unusedDevDependencies: number;
+
+  vulnerabilities: {
+    critical: number;
+    high: number;
+    moderate: number;
+    low: number;
+  };
+
+  failedChecks: number;
+}
+
+interface HealthResult {
   score: number;
   status: string;
 }
 
-interface HealthInput {
-  unusedDependencies: number;
-  unusedDevDependencies: number;
-  vulnerabilities: {
-    low: number;
-    moderate: number;
-    high: number;
-    critical: number;
-  };
-}
-
-export function calculateHealth(input: HealthInput): HealthResult {
+export function calculateHealth(
+  input: HealthInput,
+): HealthResult {
   let score = 100;
 
-  // Dependency penalties
-  score -= input.unusedDependencies * 5;
-  score -= input.unusedDevDependencies * 2;
+  // --------------------------------
+  // Unused production dependencies
+  // --------------------------------
 
-  // Security penalties
-  score -= input.vulnerabilities.low * 2;
+  score -= input.unusedDependencies * 3;
+
+  // --------------------------------
+  // Unused development dependencies
+  // --------------------------------
+
+  score -= input.unusedDevDependencies * 1;
+
+  // --------------------------------
+  // Security vulnerabilities
+  // --------------------------------
+
+  score -= input.vulnerabilities.critical * 20;
+
+  score -= input.vulnerabilities.high * 10;
+
   score -= input.vulnerabilities.moderate * 5;
-  score -= input.vulnerabilities.high * 15;
-  score -= input.vulnerabilities.critical * 25;
 
+  score -= input.vulnerabilities.low * 1;
+
+  // --------------------------------
+  // Failed project checks
+  // --------------------------------
+
+  score -= input.failedChecks * 3;
+
+  // --------------------------------
   // Keep score between 0 and 100
+  // --------------------------------
+
   score = Math.max(0, Math.min(100, score));
 
-  let status = "Excellent";
+  // --------------------------------
+  // Health status
+  // --------------------------------
 
-  if (score < 90) {
+  let status: string;
+
+  if (score >= 90) {
+    status = "Excellent";
+  } else if (score >= 75) {
     status = "Good";
-  }
-
-  if (score < 75) {
+  } else if (score >= 50) {
     status = "Needs Attention";
-  }
-
-  if (score < 50) {
+  } else {
     status = "Poor";
   }
 
@@ -49,3 +79,4 @@ export function calculateHealth(input: HealthInput): HealthResult {
     status,
   };
 }
+
