@@ -1,102 +1,250 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const ignoredDirectories = new Set([
-  "node_modules",
-  ".git",
-  ".next",
-  "dist",
-  "build",
-]);
+interface DependencyAnalysis {
+  unusedDependencies: string[];
+  unusedDevDependencies: string[];
+}
 
-const sourceExtensions = new Set([
-  ".js",
-  ".jsx",
-  ".ts",
-  ".tsx",
-]);
+export function analyzeDependencies(
+  dependencies: Record<string, string>,
+  devDependencies: Record<string, string>,
+): DependencyAnalysis {
+  const projectPath = process.cwd();
 
+  const files = getProjectFiles(projectPath);
 
-function getSourceFiles(directory: string): string[] {
+  let sourceCode = "";
+
+  for (const file of files) {
+    try {
+      sourceCode +=
+        fs.readFileSync(file, "utf-8") + "\n";
+    } catch {
+      // Ignore
+  }
+  }
+
+  // --------------------------------
+  // Read package.json
+  // --------------------------------
+
+  let packageJsonContent = "";
+
+  const packageJsonPath = path.join(
+    projectPath,
+    "package.json",
+  );
+
+  try {
+    packageJsonContent = fs.readFileSync(
+      packageJsonPath,
+      "utf-8",
+    );
+  } catch {
+    // Ignore
+  }
+
+  // --------------------------------
+  // Find used dependencies
+  // --------------------------------
+
+  const unusedDependencies: string[] = [];
+
+  const unusedDevDependencies: string[] = [];
+
+  // --------------------------------
+  // Production dependencies
+  // --------------------------------
+
+  for (const dependency of Object.keys(
+    dependencies,
+  )) {
+    const used =
+      isDependencyUsed(
+        dependency,
+        sourceCode,
+        packageJsonContent,
+      );
+
+    if (!used) {
+      unusedDependencies.push(dependency);
+    }
+  }
+
+  // --------------------------------
+  // Development dependencies
+  // --------------------------------
+
+  for (const dependency of Object.keys(
+    devDependencies,
+  )) {
+    const used =
+      isDependencyUsed(
+        dependency,
+        sourceCode,
+        packageJsonContent,
+      );
+
+    if (!used) {
+      unusedDevDependencies.push(dependency);
+    }
+  }
+
+  return {
+    unusedDependencies,
+    unusedDevDependencies,
+  };
+}
+
+// --------------------------------
+// Check whether dependency is used
+// --------------------------------
+
+function isDependencyUsed(
+  dependency: string,
+  sourceCode: string,
+  packageJsonContent: string,
+): boolean {
+  // --------------------------------
+  // Direct import
+  // --------------------------------
+
+  const importPattern = new RegExp(
+    `(?:from\\s+|import\\s*\\(?\\s*|require\\(\\s*)["']${escapeRegExp(
+      dependency,
+    )}(?:/[^"']*)?["']`,
+  );
+
+  if (importPattern.test(sourceCode)) {
+    return true;
+  }
+
+  // --------------------------------
+  // Package mentioned in configuration
+  // --------------------------------
+
+  const packagePattern = new RegExp(
+    `["']${escapeRegExp(
+      dependency,
+    )}["']`,
+  );
+
+  if (packagePattern.test(packageJsonContent)) {
+    return true;
+  }
+
+  // --------------------------------
+  // Special development dependencies
+  // --------------------------------
+
+  const specialDependencies = [
+    "typescript",
+    "tsx",
+    "ts-node",
+    "eslint",
+    "prettier",
+    "vitest",
+    "jest",
+    "@types/node",
+  ];
+
+  if (
+    specialDependencies.includes(dependency)
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+// --------------------------------
+// Find project files
+// --------------------------------
+
+function getProjectFiles(
+  directory: string,
+): string[] {
   const files: string[] = [];
 
-  const entries = fs.readdirSync(directory, {
-    withFileTypes: true,
-  });
+  const ignoredDirectories = new Set([
+    "node_modules",
+    ".git",
+    "dist",
+    "build",
+    ".next",
+    "coverage",
+  ]);
 
-  for (const entry of entries) {
-    const fullPath = path.join(directory, entry.name);
+  function walk(currentDirectory: string) {
+    let entries: fs.Dirent[];
 
-    if (entry.isDirectory()) {
-      if (ignoredDirectories.has(entry.name)) {
+    try {
+      entries = fs.readdirSync(
+        currentDirectory,
+        {
+          withFileTypes: true,
+        },
+      );
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      const fullPath = path.join(
+        currentDirectory,
+        entry.name,
+      );
+
+      if (
+        entry.isDirectory() &&
+        !ignoredDirectories.has(entry.name)
+      ) {
+        walk(fullPath);
         continue;
       }
 
-      files.push(...getSourceFiles(fullPath));
-    } else {
-      const extension = path.extname(entry.name);
+      if (!entry.isFile()) {
+        continue;
+      }
 
-      if (sourceExtensions.has(extension)) {
+      const extension =
+        path.extname(entry.name);
+
+      const supportedExtensions = [
+        ".ts",
+        ".tsx",
+        ".js",
+        ".jsx",
+        ".mjs",
+        ".cjs",
+      ];
+
+      if (
+        supportedExtensions.includes(
+          extension,
+        )
+      ) {
         files.push(fullPath);
       }
     }
   }
 
+  walk(directory);
+
   return files;
 }
-function getUsedPackages(files: string[]): Set<string> {
-  const usedPackages = new Set<string>();
 
-  for (const file of files) {
-    const content = fs.readFileSync(file, "utf-8");
+// --------------------------------
+// Escape regex characters
+// --------------------------------
 
-    const patterns = [
-      /import\s+(?:[\s\S]*?\s+from\s+)?["']([^"']+)["']/g,
-      /require\s*\(\s*["']([^"']+)["']\s*\)/g,
-      /import\s*\(\s*["']([^"']+)["']\s*\)/g,
-    ];
-
-    for (const pattern of patterns) {
-      const matches = content.matchAll(pattern);
-
-      for (const match of matches) {
-        const packageName = match[1];
-
-        if (!packageName.startsWith(".")) {
-          const rootPackage = packageName.startsWith("@")
-            ? packageName.split("/").slice(0, 2).join("/")
-            : packageName.split("/")[0];
-
-          usedPackages.add(rootPackage);
-        }
-      }
-    }
-  }
-
-  return usedPackages;
-}
-export function analyzeDependencies(
-  dependencies: Record<string, string>,
-  devDependencies: Record<string, string>,
-) {
-  const projectPath = process.cwd();
-
-  const sourceFiles = getSourceFiles(projectPath);
-
-  const usedPackages = getUsedPackages(sourceFiles);
-
-  const unusedDependencies = Object.keys(dependencies).filter(
-    (dependency) => !usedPackages.has(dependency),
+function escapeRegExp(
+  value: string,
+): string {
+  return value.replace(
+    /[.*+?^${}()|[\]\\]/g,
+    "\\$&",
   );
-
-  const unusedDevDependencies = Object.keys(devDependencies).filter(
-    (dependency) => !usedPackages.has(dependency),
-  );
-
-  return {
-    sourceFiles,
-    usedPackages,
-    unusedDependencies,
-    unusedDevDependencies,
-  };
 }
+
