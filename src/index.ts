@@ -2,7 +2,7 @@
 
 import { Command } from "commander";
 
-import { runFixes } from "./fixers.js";
+import { runFixes, type FixResult } from "./fixers.js";
 import { analyzeProject } from "./analyzers/project.js";
 import { analyzePackage } from "./analyzers/package.js";
 import { analyzeDependencies } from "./analyzers/dependencies.js";
@@ -37,20 +37,26 @@ program
     // Apply safe fixes
     // --------------------------------
 
+    let fixResults: FixResult[] = [];
+
     if (options.fix) {
-      const fixes = runFixes();
+      fixResults = runFixes();
 
-      console.log("🔧 Applying safe fixes...\n");
+      // Don't print fix messages when
+      // JSON output is requested.
+      if (!options.json) {
+        console.log("🔧 Applying safe fixes...\n");
 
-      for (const fix of fixes) {
-        if (fix.fixed) {
-          console.log(`   ✓ ${fix.message}`);
-        } else {
-          console.log(`   ℹ ${fix.message}`);
+        for (const fix of fixResults) {
+          if (fix.fixed) {
+            console.log(`   ✓ ${fix.message}`);
+          } else {
+            console.log(`   ℹ ${fix.message}`);
+          }
         }
-      }
 
-      console.log();
+        console.log();
+      }
     }
 
     // --------------------------------
@@ -60,7 +66,23 @@ program
     const packageJson = analyzePackage();
 
     if (!packageJson) {
-      console.log("⚠️ No package.json found");
+      if (options.json) {
+        console.log(
+          JSON.stringify(
+            {
+              project,
+              packageJson: null,
+              error: "No package.json found",
+              fixes: fixResults,
+            },
+            null,
+            2,
+          ),
+        );
+      } else {
+        console.log("⚠️ No package.json found");
+      }
+
       return;
     }
 
@@ -99,22 +121,26 @@ program
     // --------------------------------
 
     const failedChecks = projectChecks.filter(
-  (check) => !check.passed,
-).length;
+      (check) => !check.passed,
+    ).length;
 
-const health = calculateHealth({
-  unusedDependencies:
-    dependencyAnalysis.unusedDependencies.length,
+    const health = calculateHealth({
+      unusedDependencies:
+        dependencyAnalysis.unusedDependencies.length,
 
-  unusedDevDependencies:
-    dependencyAnalysis.unusedDevDependencies.length,
+      unusedDevDependencies:
+        dependencyAnalysis.unusedDevDependencies.length,
 
-  vulnerabilities:
-    securityAnalysis.vulnerabilities,
+      vulnerabilities:
+        securityAnalysis.vulnerabilities,
 
-  failedChecks,
-});
+      failedChecks,
+    });
+
+    // --------------------------------
     // Collect report data
+    // --------------------------------
+
     const reportData = {
       project,
       packageJson,
@@ -123,8 +149,13 @@ const health = calculateHealth({
       dependencyAnalysis,
       securityAnalysis,
       health,
+      fixes: fixResults,
     };
+
+    // --------------------------------
     // Generate report
+    // --------------------------------
+
     if (options.json) {
       printJsonReport(reportData);
     } else {

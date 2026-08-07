@@ -28,25 +28,40 @@ program
     // --------------------------------
     // Apply safe fixes
     // --------------------------------
+    let fixResults = [];
     if (options.fix) {
-        const fixes = runFixes();
-        console.log("🔧 Applying safe fixes...\n");
-        for (const fix of fixes) {
-            if (fix.fixed) {
-                console.log(`   ✓ ${fix.message}`);
+        fixResults = runFixes();
+        // Don't print fix messages when
+        // JSON output is requested.
+        if (!options.json) {
+            console.log("🔧 Applying safe fixes...\n");
+            for (const fix of fixResults) {
+                if (fix.fixed) {
+                    console.log(`   ✓ ${fix.message}`);
+                }
+                else {
+                    console.log(`   ℹ ${fix.message}`);
+                }
             }
-            else {
-                console.log(`   ℹ ${fix.message}`);
-            }
+            console.log();
         }
-        console.log();
     }
     // --------------------------------
     // Package analysis
     // --------------------------------
     const packageJson = analyzePackage();
     if (!packageJson) {
-        console.log("⚠️ No package.json found");
+        if (options.json) {
+            console.log(JSON.stringify({
+                project,
+                packageJson: null,
+                error: "No package.json found",
+                fixes: fixResults,
+            }, null, 2));
+        }
+        else {
+            console.log("⚠️ No package.json found");
+        }
         return;
     }
     // --------------------------------
@@ -75,7 +90,9 @@ program
         vulnerabilities: securityAnalysis.vulnerabilities,
         failedChecks,
     });
+    // --------------------------------
     // Collect report data
+    // --------------------------------
     const reportData = {
         project,
         packageJson,
@@ -84,8 +101,11 @@ program
         dependencyAnalysis,
         securityAnalysis,
         health,
+        fixes: fixResults,
     };
+    // --------------------------------
     // Generate report
+    // --------------------------------
     if (options.json) {
         printJsonReport(reportData);
     }

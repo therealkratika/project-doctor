@@ -2,7 +2,13 @@ import fs from "node:fs";
 import path from "node:path";
 export function analyzeDependencies(dependencies, devDependencies) {
     const projectPath = process.cwd();
+    // --------------------------------
+    // Get project files
+    // --------------------------------
     const files = getProjectFiles(projectPath);
+    // --------------------------------
+    // Read source files
+    // --------------------------------
     let sourceCode = "";
     for (const file of files) {
         try {
@@ -10,40 +16,41 @@ export function analyzeDependencies(dependencies, devDependencies) {
                 fs.readFileSync(file, "utf-8") + "\n";
         }
         catch {
-            // Ignore
+            // Ignore unreadable files
         }
     }
     // --------------------------------
     // Read package.json
     // --------------------------------
-    let packageJsonContent = "";
-    const packageJsonPath = path.join(projectPath, "package.json");
-    try {
-        packageJsonContent = fs.readFileSync(packageJsonPath, "utf-8");
-    }
-    catch {
-        // Ignore
-    }
+    const packageJson = readPackageJson(projectPath);
     // --------------------------------
-    // Find used dependencies
+    // Get scripts
+    // --------------------------------
+    const scripts = Object.values(packageJson?.scripts ?? {}).join("\n");
+    // --------------------------------
+    // Get configuration files
+    // --------------------------------
+    const configCode = readConfigFiles(projectPath);
+    const searchableContent = [
+        sourceCode,
+        scripts,
+        configCode,
+    ].join("\n");
+    // --------------------------------
+    // Analyze production dependencies
     // --------------------------------
     const unusedDependencies = [];
-    const unusedDevDependencies = [];
-    // --------------------------------
-    // Production dependencies
-    // --------------------------------
     for (const dependency of Object.keys(dependencies)) {
-        const used = isDependencyUsed(dependency, sourceCode, packageJsonContent);
-        if (!used) {
+        if (!isDependencyUsed(dependency, searchableContent)) {
             unusedDependencies.push(dependency);
         }
     }
     // --------------------------------
-    // Development dependencies
+    // Analyze dev dependencies
     // --------------------------------
+    const unusedDevDependencies = [];
     for (const dependency of Object.keys(devDependencies)) {
-        const used = isDependencyUsed(dependency, sourceCode, packageJsonContent);
-        if (!used) {
+        if (!isDependencyUsed(dependency, searchableContent)) {
             unusedDevDependencies.push(dependency);
         }
     }
@@ -53,43 +60,85 @@ export function analyzeDependencies(dependencies, devDependencies) {
     };
 }
 // --------------------------------
-// Check whether dependency is used
+// Check if dependency is used
 // --------------------------------
-function isDependencyUsed(dependency, sourceCode, packageJsonContent) {
+function isDependencyUsed(dependency, content) {
+    const escapedDependency = escapeRegExp(dependency);
     // --------------------------------
-    // Direct import
+    // Import
     // --------------------------------
-    const importPattern = new RegExp(`(?:from\\s+|import\\s*\\(?\\s*|require\\(\\s*)["']${escapeRegExp(dependency)}(?:/[^"']*)?["']`);
-    if (importPattern.test(sourceCode)) {
+    const importPattern = new RegExp(`(?:from\\s+|import\\s*\\(?\\s*|require\\(\\s*)["']${escapedDependency}(?:/[^"']*)?["']`);
+    if (importPattern.test(content)) {
         return true;
     }
     // --------------------------------
-    // Package mentioned in configuration
+    // Package name inside commands/config
     // --------------------------------
-    const packagePattern = new RegExp(`["']${escapeRegExp(dependency)}["']`);
-    if (packagePattern.test(packageJsonContent)) {
-        return true;
-    }
-    // --------------------------------
-    // Special development dependencies
-    // --------------------------------
-    const specialDependencies = [
-        "typescript",
-        "tsx",
-        "ts-node",
-        "eslint",
-        "prettier",
-        "vitest",
-        "jest",
-        "@types/node",
-    ];
-    if (specialDependencies.includes(dependency)) {
+    const packagePattern = new RegExp(`(^|[^a-zA-Z0-9_-])${escapedDependency}([^a-zA-Z0-9_-]|$)`);
+    if (packagePattern.test(content)) {
         return true;
     }
     return false;
 }
 // --------------------------------
-// Find project files
+// Read package.json
+// --------------------------------
+function readPackageJson(projectPath) {
+    const packagePath = path.join(projectPath, "package.json");
+    if (!fs.existsSync(packagePath)) {
+        return null;
+    }
+    try {
+        const content = fs.readFileSync(packagePath, "utf-8");
+        return JSON.parse(content);
+    }
+    catch {
+        return null;
+    }
+}
+// --------------------------------
+// Read configuration files
+// --------------------------------
+function readConfigFiles(projectPath) {
+    const configFiles = [
+        "tsconfig.json",
+        "eslint.config.js",
+        "eslint.config.mjs",
+        "eslint.config.cjs",
+        ".eslintrc",
+        ".eslintrc.json",
+        ".eslintrc.js",
+        ".prettierrc",
+        "prettier.config.js",
+        "prettier.config.mjs",
+        "vite.config.ts",
+        "vite.config.js",
+        "next.config.js",
+        "next.config.mjs",
+        "next.config.ts",
+        "jest.config.js",
+        "jest.config.ts",
+        "vitest.config.ts",
+        "vitest.config.js",
+    ];
+    let content = "";
+    for (const file of configFiles) {
+        const filePath = path.join(projectPath, file);
+        if (!fs.existsSync(filePath)) {
+            continue;
+        }
+        try {
+            content +=
+                fs.readFileSync(filePath, "utf-8") + "\n";
+        }
+        catch {
+            // Ignore unreadable config files
+        }
+    }
+    return content;
+}
+// --------------------------------
+// Find source files
 // --------------------------------
 function getProjectFiles(directory) {
     const files = [];
@@ -100,6 +149,14 @@ function getProjectFiles(directory) {
         "build",
         ".next",
         "coverage",
+    ]);
+    const supportedExtensions = new Set([
+        ".ts",
+        ".tsx",
+        ".js",
+        ".jsx",
+        ".mjs",
+        ".cjs",
     ]);
     function walk(currentDirectory) {
         let entries;
@@ -121,16 +178,7 @@ function getProjectFiles(directory) {
             if (!entry.isFile()) {
                 continue;
             }
-            const extension = path.extname(entry.name);
-            const supportedExtensions = [
-                ".ts",
-                ".tsx",
-                ".js",
-                ".jsx",
-                ".mjs",
-                ".cjs",
-            ];
-            if (supportedExtensions.includes(extension)) {
+            if (supportedExtensions.has(path.extname(entry.name))) {
                 files.push(fullPath);
             }
         }
@@ -139,7 +187,7 @@ function getProjectFiles(directory) {
     return files;
 }
 // --------------------------------
-// Escape regex characters
+// Escape regular expression
 // --------------------------------
 function escapeRegExp(value) {
     return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
