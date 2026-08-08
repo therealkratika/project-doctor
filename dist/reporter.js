@@ -1,6 +1,6 @@
 import chalk from "chalk";
 export function printReport(data) {
-    const { project, packageJson, technology, projectChecks, dependencyAnalysis, securityAnalysis, health, } = data;
+    const { project, packageJson, technology, projectChecks, dependencyAnalysis, securityAnalysis, health, recommendations, fixes, } = data;
     // --------------------------------
     // Header
     // --------------------------------
@@ -46,8 +46,10 @@ export function printReport(data) {
     // Dependency analysis
     // --------------------------------
     console.log(chalk.bold("\n🔍 Dependency Analysis"));
+    // Production dependencies
     console.log("\n   Production:");
-    if (dependencyAnalysis.unusedDependencies.length === 0) {
+    if (dependencyAnalysis.unusedDependencies
+        .length === 0) {
         console.log(chalk.green("   ✓ No potentially unused dependencies detected"));
     }
     else {
@@ -56,8 +58,10 @@ export function printReport(data) {
             console.log(chalk.yellow(`   ⚠ ${dependency}`));
         }
     }
+    // Development dependencies
     console.log("\n   Development:");
-    if (dependencyAnalysis.unusedDevDependencies.length === 0) {
+    if (dependencyAnalysis
+        .unusedDevDependencies.length === 0) {
         console.log(chalk.green("   ✓ No potentially unused devDependencies detected"));
     }
     else {
@@ -75,7 +79,7 @@ export function printReport(data) {
     }
     else {
         console.log(chalk.yellow(`   ⚠ ${securityAnalysis.total} vulnerabilities detected`));
-        const { vulnerabilities } = securityAnalysis;
+        const { vulnerabilities, } = securityAnalysis;
         if (vulnerabilities.critical > 0) {
             console.log(chalk.red(`   ❌ Critical: ${vulnerabilities.critical}`));
         }
@@ -90,7 +94,7 @@ export function printReport(data) {
         }
     }
     // --------------------------------
-    // Health
+    // Health Score
     // --------------------------------
     let scoreColor;
     if (health.score >= 90) {
@@ -104,11 +108,44 @@ export function printReport(data) {
     }
     console.log(chalk.bold("\n❤️ Health Score"));
     console.log(`   ${scoreColor(`${health.score}/100`)} — ${health.status}`);
+    // --------------------------------
+    // Issues
+    // --------------------------------
     const failedChecks = projectChecks.filter((check) => !check.passed);
     if (failedChecks.length > 0) {
         console.log(chalk.bold("\n⚠ Issues"));
         for (const check of failedChecks) {
             console.log(chalk.yellow(`   • ${check.message}`));
+        }
+    }
+    // --------------------------------
+    // Recommendations
+    // --------------------------------
+    if (recommendations.length > 0) {
+        console.log(chalk.bold("\n💡 Recommendations"));
+        for (const recommendation of recommendations) {
+            if (recommendation.type === "warning") {
+                console.log(chalk.yellow(`   ⚠ ${recommendation.message}`));
+            }
+            else if (recommendation.type === "success") {
+                console.log(chalk.green(`   ✓ ${recommendation.message}`));
+            }
+            else {
+                console.log(chalk.cyan(`   ℹ ${recommendation.message}`));
+            }
+            if (recommendation.command) {
+                console.log(chalk.gray(`     → ${recommendation.command}`));
+            }
+        }
+    }
+    // --------------------------------
+    // Fixes
+    // --------------------------------
+    const appliedFixes = fixes.filter((fix) => fix.fixed);
+    if (appliedFixes.length > 0) {
+        console.log(chalk.bold("\n🔧 Fixes Applied"));
+        for (const fix of appliedFixes) {
+            console.log(chalk.green(`   ✓ ${fix.message}`));
         }
     }
     // --------------------------------

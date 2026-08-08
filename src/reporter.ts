@@ -46,6 +46,18 @@ interface ReporterData {
     score: number;
     status: string;
   };
+
+  recommendations: {
+    type: "warning" | "info" | "success";
+    message: string;
+    command?: string;
+  }[];
+
+  fixes: {
+    name: string;
+    fixed: boolean;
+    message: string;
+  }[];
 }
 
 export function printReport(data: ReporterData): void {
@@ -57,50 +69,85 @@ export function printReport(data: ReporterData): void {
     dependencyAnalysis,
     securityAnalysis,
     health,
+    recommendations,
+    fixes,
   } = data;
 
   // --------------------------------
   // Header
   // --------------------------------
 
-  console.log(chalk.bold.cyan("🩺 PROJECT DOCTOR"));
-  console.log(chalk.gray("━".repeat(40)));
+  console.log(
+    chalk.bold.cyan("🩺 PROJECT DOCTOR"),
+  );
+
+  console.log(
+    chalk.gray("━".repeat(40)),
+  );
+
   console.log();
 
   // --------------------------------
   // Project
   // --------------------------------
 
-  console.log(chalk.bold("📁 Project"));
+  console.log(
+    chalk.bold("📁 Project"),
+  );
 
-  console.log(`   Name: ${project.projectName}`);
-  console.log(`   Path: ${project.projectPath}`);
+  console.log(
+    `   Name: ${project.projectName}`,
+  );
+
+  console.log(
+    `   Path: ${project.projectPath}`,
+  );
 
   // --------------------------------
   // Technology
   // --------------------------------
 
-  console.log(chalk.bold("\n🧩 Technology"));
+  console.log(
+    chalk.bold("\n🧩 Technology"),
+  );
 
-  console.log(`   Framework: ${technology.framework}`);
-  console.log(`   Language: ${technology.language}`);
-  console.log(`   Styling: ${technology.styling}`);
-  console.log(`   Database: ${technology.database}`);
-  console.log(`   ORM: ${technology.orm}`);
+  console.log(
+    `   Framework: ${technology.framework}`,
+  );
+
+  console.log(
+    `   Language: ${technology.language}`,
+  );
+
+  console.log(
+    `   Styling: ${technology.styling}`,
+  );
+
+  console.log(
+    `   Database: ${technology.database}`,
+  );
+
+  console.log(
+    `   ORM: ${technology.orm}`,
+  );
 
   // --------------------------------
   // Dependencies
   // --------------------------------
 
-  const productionDependencies = Object.keys(
-    packageJson.dependencies,
-  ).length;
+  const productionDependencies =
+    Object.keys(
+      packageJson.dependencies,
+    ).length;
 
-  const developmentDependencies = Object.keys(
-    packageJson.devDependencies,
-  ).length;
+  const developmentDependencies =
+    Object.keys(
+      packageJson.devDependencies,
+    ).length;
 
-  console.log(chalk.bold("\n📦 Dependencies"));
+  console.log(
+    chalk.bold("\n📦 Dependencies"),
+  );
 
   console.log(
     `   Production: ${productionDependencies}`,
@@ -114,16 +161,22 @@ export function printReport(data: ReporterData): void {
   // Project checks
   // --------------------------------
 
-  console.log(chalk.bold("\n📋 Project Checks"));
+  console.log(
+    chalk.bold("\n📋 Project Checks"),
+  );
 
   for (const check of projectChecks) {
     if (check.passed) {
       console.log(
-        chalk.green(`   ✓ ${check.message}`),
+        chalk.green(
+          `   ✓ ${check.message}`,
+        ),
       );
     } else {
       console.log(
-        chalk.yellow(`   ⚠ ${check.message}`),
+        chalk.yellow(
+          `   ⚠ ${check.message}`,
+        ),
       );
     }
   }
@@ -136,9 +189,14 @@ export function printReport(data: ReporterData): void {
     chalk.bold("\n🔍 Dependency Analysis"),
   );
 
+  // Production dependencies
+
   console.log("\n   Production:");
 
-  if (dependencyAnalysis.unusedDependencies.length === 0) {
+  if (
+    dependencyAnalysis.unusedDependencies
+      .length === 0
+  ) {
     console.log(
       chalk.green(
         "   ✓ No potentially unused dependencies detected",
@@ -146,20 +204,30 @@ export function printReport(data: ReporterData): void {
     );
   } else {
     console.log(
-      chalk.yellow("   ⚠ Potentially unused:"),
+      chalk.yellow(
+        "   ⚠ Potentially unused:",
+      ),
     );
 
-    for (const dependency of dependencyAnalysis.unusedDependencies) {
+    for (
+      const dependency of
+      dependencyAnalysis.unusedDependencies
+    ) {
       console.log(
-        chalk.yellow(`   ⚠ ${dependency}`),
+        chalk.yellow(
+          `   ⚠ ${dependency}`,
+        ),
       );
     }
   }
 
+  // Development dependencies
+
   console.log("\n   Development:");
 
   if (
-    dependencyAnalysis.unusedDevDependencies.length === 0
+    dependencyAnalysis
+      .unusedDevDependencies.length === 0
   ) {
     console.log(
       chalk.green(
@@ -168,14 +236,19 @@ export function printReport(data: ReporterData): void {
     );
   } else {
     console.log(
-      chalk.yellow("   ⚠ Potentially unused:"),
+      chalk.yellow(
+        "   ⚠ Potentially unused:",
+      ),
     );
 
     for (
-      const dependency of dependencyAnalysis.unusedDevDependencies
+      const dependency of
+      dependencyAnalysis.unusedDevDependencies
     ) {
       console.log(
-        chalk.yellow(`   ⚠ ${dependency}`),
+        chalk.yellow(
+          `   ⚠ ${dependency}`,
+        ),
       );
     }
   }
@@ -184,11 +257,15 @@ export function printReport(data: ReporterData): void {
   // Security
   // --------------------------------
 
-  console.log(chalk.bold("\n🔐 Security"));
+  console.log(
+    chalk.bold("\n🔐 Security"),
+  );
 
   if (securityAnalysis.total === 0) {
     console.log(
-      chalk.green("   ✓ No vulnerabilities detected"),
+      chalk.green(
+        "   ✓ No vulnerabilities detected",
+      ),
     );
   } else {
     console.log(
@@ -197,7 +274,9 @@ export function printReport(data: ReporterData): void {
       ),
     );
 
-    const { vulnerabilities } = securityAnalysis;
+    const {
+      vulnerabilities,
+    } = securityAnalysis;
 
     if (vulnerabilities.critical > 0) {
       console.log(
@@ -233,7 +312,7 @@ export function printReport(data: ReporterData): void {
   }
 
   // --------------------------------
-  // Health
+  // Health Score
   // --------------------------------
 
   let scoreColor: typeof chalk.green;
@@ -246,29 +325,113 @@ export function printReport(data: ReporterData): void {
     scoreColor = chalk.red;
   }
 
-  console.log(chalk.bold("\n❤️ Health Score"));
+  console.log(
+    chalk.bold("\n❤️ Health Score"),
+  );
 
   console.log(
-    `   ${scoreColor(`${health.score}/100`)} — ${health.status}`,
+    `   ${scoreColor(
+      `${health.score}/100`,
+    )} — ${health.status}`,
   );
-const failedChecks = projectChecks.filter(
-  (check) => !check.passed,
-);
 
-if (failedChecks.length > 0) {
-  console.log(chalk.bold("\n⚠ Issues"));
+  // --------------------------------
+  // Issues
+  // --------------------------------
 
-  for (const check of failedChecks) {
-    console.log(
-      chalk.yellow(`   • ${check.message}`),
+  const failedChecks =
+    projectChecks.filter(
+      (check) => !check.passed,
     );
+
+  if (failedChecks.length > 0) {
+    console.log(
+      chalk.bold("\n⚠ Issues"),
+    );
+
+    for (const check of failedChecks) {
+      console.log(
+        chalk.yellow(
+          `   • ${check.message}`,
+        ),
+      );
+    }
   }
-}
+
+  // --------------------------------
+  // Recommendations
+  // --------------------------------
+
+  if (recommendations.length > 0) {
+    console.log(
+      chalk.bold("\n💡 Recommendations"),
+    );
+
+    for (const recommendation of recommendations) {
+      if (
+        recommendation.type === "warning"
+      ) {
+        console.log(
+          chalk.yellow(
+            `   ⚠ ${recommendation.message}`,
+          ),
+        );
+      } else if (
+        recommendation.type === "success"
+      ) {
+        console.log(
+          chalk.green(
+            `   ✓ ${recommendation.message}`,
+          ),
+        );
+      } else {
+        console.log(
+          chalk.cyan(
+            `   ℹ ${recommendation.message}`,
+          ),
+        );
+      }
+
+      if (recommendation.command) {
+        console.log(
+          chalk.gray(
+            `     → ${recommendation.command}`,
+          ),
+        );
+      }
+    }
+  }
+
+  // --------------------------------
+  // Fixes
+  // --------------------------------
+
+  const appliedFixes =
+    fixes.filter(
+      (fix) => fix.fixed,
+    );
+
+  if (appliedFixes.length > 0) {
+    console.log(
+      chalk.bold("\n🔧 Fixes Applied"),
+    );
+
+    for (const fix of appliedFixes) {
+      console.log(
+        chalk.green(
+          `   ✓ ${fix.message}`,
+        ),
+      );
+    }
+  }
+
   // --------------------------------
   // Footer
   // --------------------------------
 
   console.log();
-  console.log(chalk.gray("━".repeat(40)));
-}
 
+  console.log(
+    chalk.gray("━".repeat(40)),
+  );
+}

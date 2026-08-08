@@ -8,6 +8,7 @@ import { analyzeSecurity } from "./analyzers/security.js";
 import { calculateHealth } from "./analyzers/health.js";
 import { runProjectChecks } from "./analyzers/checks.js";
 import { analyzeTechnology } from "./analyzers/technology.js";
+import { generateRecommendations } from "./recommendations.js";
 import { printReport } from "./reporter.js";
 import { printJsonReport } from "./json-reporter.js";
 const program = new Command();
@@ -90,6 +91,13 @@ program
         vulnerabilities: securityAnalysis.vulnerabilities,
         failedChecks,
     });
+    const recommendations = generateRecommendations({
+        projectChecks,
+        unusedDependencies: dependencyAnalysis.unusedDependencies,
+        unusedDevDependencies: dependencyAnalysis.unusedDevDependencies,
+        vulnerabilities: securityAnalysis.vulnerabilities,
+        healthScore: health.score,
+    });
     // --------------------------------
     // Collect report data
     // --------------------------------
@@ -101,6 +109,7 @@ program
         dependencyAnalysis,
         securityAnalysis,
         health,
+        recommendations,
         fixes: fixResults,
     };
     // --------------------------------

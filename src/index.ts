@@ -10,7 +10,7 @@ import { analyzeSecurity } from "./analyzers/security.js";
 import { calculateHealth } from "./analyzers/health.js";
 import { runProjectChecks } from "./analyzers/checks.js";
 import { analyzeTechnology } from "./analyzers/technology.js";
-
+import { generateRecommendations } from "./recommendations.js";
 import { printReport } from "./reporter.js";
 import { printJsonReport } from "./json-reporter.js";
 
@@ -136,21 +136,37 @@ program
 
       failedChecks,
     });
+    const recommendations =
+  generateRecommendations({
+    projectChecks,
+
+    unusedDependencies:
+      dependencyAnalysis.unusedDependencies,
+
+    unusedDevDependencies:
+      dependencyAnalysis.unusedDevDependencies,
+
+    vulnerabilities:
+      securityAnalysis.vulnerabilities,
+
+    healthScore: health.score,
+  });
 
     // --------------------------------
     // Collect report data
     // --------------------------------
 
     const reportData = {
-      project,
-      packageJson,
-      technology,
-      projectChecks,
-      dependencyAnalysis,
-      securityAnalysis,
-      health,
-      fixes: fixResults,
-    };
+  project,
+  packageJson,
+  technology,
+  projectChecks,
+  dependencyAnalysis,
+  securityAnalysis,
+  health,
+  recommendations,
+  fixes: fixResults,
+};
 
     // --------------------------------
     // Generate report
