@@ -59,14 +59,16 @@ function getUsedPackages(files) {
     }
     return usedPackages;
 }
-export function analyzeDependencies(dependencies) {
+export function analyzeDependencies(dependencies, devDependencies) {
     const projectPath = process.cwd();
     const sourceFiles = getSourceFiles(projectPath);
     const usedPackages = getUsedPackages(sourceFiles);
     const unusedDependencies = Object.keys(dependencies).filter((dependency) => !usedPackages.has(dependency));
+    const unusedDevDependencies = Object.keys(devDependencies).filter((dependency) => !usedPackages.has(dependency));
     return {
         sourceFiles,
         usedPackages,
         unusedDependencies,
+        unusedDevDependencies,
     };
 }

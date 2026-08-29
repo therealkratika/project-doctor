@@ -77,6 +77,7 @@ function getUsedPackages(files: string[]): Set<string> {
 }
 export function analyzeDependencies(
   dependencies: Record<string, string>,
+  devDependencies: Record<string, string>,
 ) {
   const projectPath = process.cwd();
 
@@ -88,9 +89,14 @@ export function analyzeDependencies(
     (dependency) => !usedPackages.has(dependency),
   );
 
+  const unusedDevDependencies = Object.keys(devDependencies).filter(
+    (dependency) => !usedPackages.has(dependency),
+  );
+
   return {
     sourceFiles,
     usedPackages,
     unusedDependencies,
+    unusedDevDependencies,
   };
 }
