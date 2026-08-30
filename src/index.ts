@@ -5,6 +5,7 @@ import { analyzeProject } from "./analyzers/project.js";
 import { analyzePackage } from "./analyzers/package.js";
 import { analyzeDependencies } from "./analyzers/dependencies.js";
 import { analyzeSecurity } from "./analyzers/security.js";
+import { calculateHealth } from "./analyzers/health.js";
 
 const program = new Command();
 
@@ -109,7 +110,20 @@ program
         console.log(`   ℹ Low: ${vulnerabilities.low}`);
       }
     }
+
+    // Health score
+    const health = calculateHealth({
+      unusedDependencies:
+        dependencyAnalysis.unusedDependencies.length,
+
+      unusedDevDependencies:
+        dependencyAnalysis.unusedDevDependencies.length,
+
+      vulnerabilities: securityAnalysis.vulnerabilities,
+    });
+
+    console.log("\n❤️ Health Score");
+    console.log(`   ${health.score}/100 — ${health.status}`);
   });
 
 program.parse();
-
