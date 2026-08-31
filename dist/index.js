@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 import { Command } from "commander";
+import chalk from "chalk";
 import { analyzeProject } from "./analyzers/project.js";
 import { analyzePackage } from "./analyzers/package.js";
 import { analyzeDependencies } from "./analyzers/dependencies.js";
 import { analyzeSecurity } from "./analyzers/security.js";
+import { calculateHealth } from "./analyzers/health.js";
+import { runProjectChecks } from "./analyzers/checks.js";
 const program = new Command();
 program
     .name("project-doctor")
@@ -13,68 +16,122 @@ program
     .command("doctor")
     .description("Check the health of your project")
     .action(() => {
+    // Run analyzers
     const project = analyzeProject();
     const packageJson = analyzePackage();
-    console.log("🩺 Checking your project...\n");
+    const projectChecks = runProjectChecks();
+    // --------------------------------
+    // Header
+    // --------------------------------
+    console.log(chalk.bold.cyan("🩺 PROJECT DOCTOR"));
+    console.log(chalk.gray("━".repeat(40)));
+    console.log();
+    // --------------------------------
     // Project information
-    console.log("📁 Project");
+    // --------------------------------
+    console.log(chalk.bold("📁 Project"));
     console.log(`   Name: ${project.projectName}`);
     console.log(`   Path: ${project.projectPath}`);
+    // --------------------------------
     // Package information
+    // --------------------------------
     if (!packageJson) {
-        console.log("\n⚠️ No package.json found");
+        console.log(chalk.yellow("\n⚠️ No package.json found"));
         return;
     }
     console.log(`   Framework: ${packageJson.framework}`);
     const productionDependencies = Object.keys(packageJson.dependencies).length;
     const developmentDependencies = Object.keys(packageJson.devDependencies).length;
-    console.log("\n📦 Dependencies");
+    console.log(chalk.bold("\n📦 Dependencies"));
     console.log(`   Production: ${productionDependencies}`);
     console.log(`   Development: ${developmentDependencies}`);
+    // --------------------------------
+    // Project checks
+    // --------------------------------
+    console.log(chalk.bold("\n📋 Project Checks"));
+    for (const check of projectChecks) {
+        if (check.passed) {
+            console.log(chalk.green(`   ✓ ${check.message}`));
+        }
+        else {
+            console.log(chalk.yellow(`   ⚠ ${check.message}`));
+        }
+    }
+    // --------------------------------
     // Dependency analysis
+    // --------------------------------
     const dependencyAnalysis = analyzeDependencies(packageJson.dependencies, packageJson.devDependencies);
-    console.log("\n🔍 Dependency Analysis");
+    console.log(chalk.bold("\n🔍 Dependency Analysis"));
+    // Production dependencies
     console.log("\n   Production:");
     if (dependencyAnalysis.unusedDependencies.length === 0) {
-        console.log("   ✓ No potentially unused dependencies detected");
+        console.log(chalk.green("   ✓ No potentially unused dependencies detected"));
     }
     else {
-        console.log("   ⚠ Potentially unused:");
+        console.log(chalk.yellow("   ⚠ Potentially unused:"));
         for (const dependency of dependencyAnalysis.unusedDependencies) {
-            console.log(`   ⚠ ${dependency}`);
+            console.log(chalk.yellow(`   ⚠ ${dependency}`));
         }
     }
+    // Development dependencies
     console.log("\n   Development:");
     if (dependencyAnalysis.unusedDevDependencies.length === 0) {
-        console.log("   ✓ No potentially unused devDependencies detected");
+        console.log(chalk.green("   ✓ No potentially unused devDependencies detected"));
     }
     else {
-        console.log("   ⚠ Potentially unused:");
+        console.log(chalk.yellow("   ⚠ Potentially unused:"));
         for (const dependency of dependencyAnalysis.unusedDevDependencies) {
-            console.log(`   ⚠ ${dependency}`);
+            console.log(chalk.yellow(`   ⚠ ${dependency}`));
         }
     }
+    // --------------------------------
     // Security analysis
+    // --------------------------------
     const securityAnalysis = analyzeSecurity();
-    console.log("\n🔐 Security");
+    console.log(chalk.bold("\n🔐 Security"));
     if (securityAnalysis.total === 0) {
-        console.log("   ✓ No vulnerabilities detected");
+        console.log(chalk.green("   ✓ No vulnerabilities detected"));
     }
     else {
-        console.log(`   ⚠ ${securityAnalysis.total} vulnerabilities detected`);
+        console.log(chalk.yellow(`   ⚠ ${securityAnalysis.total} vulnerabilities detected`));
         const { vulnerabilities } = securityAnalysis;
         if (vulnerabilities.critical > 0) {
-            console.log(`   ❌ Critical: ${vulnerabilities.critical}`);
+            console.log(chalk.red(`   ❌ Critical: ${vulnerabilities.critical}`));
         }
         if (vulnerabilities.high > 0) {
-            console.log(`   ❌ High: ${vulnerabilities.high}`);
+            console.log(chalk.red(`   ❌ High: ${vulnerabilities.high}`));
         }
         if (vulnerabilities.moderate > 0) {
-            console.log(`   ⚠ Moderate: ${vulnerabilities.moderate}`);
+            console.log(chalk.yellow(`   ⚠ Moderate: ${vulnerabilities.moderate}`));
         }
         if (vulnerabilities.low > 0) {
-            console.log(`   ℹ Low: ${vulnerabilities.low}`);
+            console.log(chalk.gray(`   ℹ Low: ${vulnerabilities.low}`));
         }
     }
+    // --------------------------------
+    // Health score
+    // --------------------------------
+    const health = calculateHealth({
+        unusedDependencies: dependencyAnalysis.unusedDependencies.length,
+        unusedDevDependencies: dependencyAnalysis.unusedDevDependencies.length,
+        vulnerabilities: securityAnalysis.vulnerabilities,
+    });
+    let scoreColor;
+    if (health.score >= 90) {
+        scoreColor = chalk.green;
+    }
+    else if (health.score >= 75) {
+        scoreColor = chalk.yellow;
+    }
+    else {
+        scoreColor = chalk.red;
+    }
+    console.log(chalk.bold("\n❤️ Health Score"));
+    console.log(`   ${scoreColor(`${health.score}/100`)} — ${health.status}`);
+    // --------------------------------
+    // Footer
+    // --------------------------------
+    console.log();
+    console.log(chalk.gray("━".repeat(40)));
 });
 program.parse();

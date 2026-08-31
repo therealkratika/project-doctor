@@ -20,6 +20,7 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
+    "chalk": "^6.0.0",
     "commander": "^15.0.0"
   }
 }
