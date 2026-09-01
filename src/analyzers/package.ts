@@ -1,3 +1,4 @@
+
 import fs from "node:fs";
 import path from "node:path";
 
@@ -12,26 +13,69 @@ export function analyzePackage(): PackageInfo | null {
   const projectPath = process.cwd();
   const packagePath = path.join(projectPath, "package.json");
 
+  // Check if package.json exists
   if (!fs.existsSync(packagePath)) {
     return null;
   }
 
-  const packageFile = fs.readFileSync(packagePath, "utf-8");
-  const packageJson = JSON.parse(packageFile);
+  // Read package.json
+  let packageJson: Record<string, any>;
 
-  const dependencies = packageJson.dependencies ?? {};
-  const devDependencies = packageJson.devDependencies ?? {};
+  try {
+    const packageFile = fs.readFileSync(
+      packagePath,
+      "utf-8",
+    );
+
+    packageJson = JSON.parse(packageFile);
+  } catch {
+    return null;
+  }
+
+  const dependencies =
+    packageJson.dependencies ?? {};
+
+  const devDependencies =
+    packageJson.devDependencies ?? {};
+
+  // Combine dependencies for framework detection
+  const allDependencies = {
+    ...dependencies,
+    ...devDependencies,
+  };
 
   let framework = "Unknown";
 
-  if (dependencies.next || devDependencies.next) {
+  // Full-stack / meta frameworks
+  if (allDependencies.next) {
     framework = "Next.js";
-  } else if (dependencies.react || devDependencies.react) {
+  } else if (allDependencies.nuxt) {
+    framework = "Nuxt";
+  } else if (allDependencies["@angular/core"]) {
+    framework = "Angular";
+  } else if (allDependencies["@sveltejs/kit"]) {
+    framework = "SvelteKit";
+  }
+
+  // Frontend frameworks
+  else if (allDependencies.react) {
     framework = "React";
-  } else if (dependencies.express || devDependencies.express) {
-    framework = "Express";
-  } else if (dependencies.vue || devDependencies.vue) {
+  } else if (allDependencies.vue) {
     framework = "Vue";
+  } else if (allDependencies.svelte) {
+    framework = "Svelte";
+  }
+
+  // Backend frameworks
+  else if (allDependencies["@nestjs/core"]) {
+    framework = "NestJS";
+  } else if (allDependencies.express) {
+    framework = "Express";
+  }
+
+  // Build tools
+  else if (allDependencies.vite) {
+    framework = "Vite";
   }
 
   return {
@@ -41,3 +85,4 @@ export function analyzePackage(): PackageInfo | null {
     framework,
   };
 }
+
