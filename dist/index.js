@@ -7,6 +7,7 @@ import { analyzeDependencies } from "./analyzers/dependencies.js";
 import { analyzeSecurity } from "./analyzers/security.js";
 import { calculateHealth } from "./analyzers/health.js";
 import { runProjectChecks } from "./analyzers/checks.js";
+import { analyzeTechnology } from "./analyzers/technology.js";
 const program = new Command();
 program
     .name("project-doctor")
@@ -16,10 +17,10 @@ program
     .command("doctor")
     .description("Check the health of your project")
     .action(() => {
-    // Run analyzers
+    // --------------------------------
+    // Run project analyzer
+    // --------------------------------
     const project = analyzeProject();
-    const packageJson = analyzePackage();
-    const projectChecks = runProjectChecks();
     // --------------------------------
     // Header
     // --------------------------------
@@ -35,11 +36,27 @@ program
     // --------------------------------
     // Package information
     // --------------------------------
+    const packageJson = analyzePackage();
     if (!packageJson) {
         console.log(chalk.yellow("\n⚠️ No package.json found"));
+        console.log();
+        console.log(chalk.gray("━".repeat(40)));
         return;
     }
     console.log(`   Framework: ${packageJson.framework}`);
+    // --------------------------------
+    // Technology analysis
+    // --------------------------------
+    const technology = analyzeTechnology(packageJson.dependencies, packageJson.devDependencies);
+    console.log(chalk.bold("\n🧩 Technology"));
+    console.log(`   Framework: ${technology.framework}`);
+    console.log(`   Language: ${technology.language}`);
+    console.log(`   Styling: ${technology.styling}`);
+    console.log(`   Database: ${technology.database}`);
+    console.log(`   ORM: ${technology.orm}`);
+    // --------------------------------
+    // Dependency counts
+    // --------------------------------
     const productionDependencies = Object.keys(packageJson.dependencies).length;
     const developmentDependencies = Object.keys(packageJson.devDependencies).length;
     console.log(chalk.bold("\n📦 Dependencies"));
@@ -48,6 +65,7 @@ program
     // --------------------------------
     // Project checks
     // --------------------------------
+    const projectChecks = runProjectChecks();
     console.log(chalk.bold("\n📋 Project Checks"));
     for (const check of projectChecks) {
         if (check.passed) {
