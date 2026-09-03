@@ -10,6 +10,7 @@ import { calculateHealth } from "./analyzers/health.js";
 import { runProjectChecks } from "./analyzers/checks.js";
 import { analyzeTechnology } from "./analyzers/technology.js";
 import { printReport } from "./reporter.js";
+import { printJsonReport } from "./json-reporter.js";
 
 const program = new Command();
 
@@ -21,7 +22,8 @@ program
 program
   .command("doctor")
   .description("Check the health of your project")
-  .action(() => {
+  .option("--json", "Output results as JSON")
+  .action((options) => {
     // --------------------------------
     // Project analysis
     // --------------------------------
@@ -90,15 +92,21 @@ program
     // Generate terminal report
     // --------------------------------
 
-    printReport({
-      project,
-      packageJson,
-      technology,
-      projectChecks,
-      dependencyAnalysis,
-      securityAnalysis,
-      health,
-    });
+    const reportData = {
+  project,
+  packageJson,
+  technology,
+  projectChecks,
+  dependencyAnalysis,
+  securityAnalysis,
+  health,
+};
+
+if (options.json) {
+  printJsonReport(reportData);
+} else {
+  printReport(reportData);
+}
   });
 
 program.parse();
