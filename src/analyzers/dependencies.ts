@@ -4,6 +4,7 @@ import path from "node:path";
 interface DependencyAnalysis {
   unusedDependencies: string[];
   unusedDevDependencies: string[];
+  missingDependencies: string[];
 }
 
 interface PackageJson {
@@ -43,9 +44,7 @@ export function analyzeDependencies(
   // Read package.json
   // --------------------------------
 
-  const packageJson = readPackageJson(
-    projectPath,
-  );
+  const packageJson = readPackageJson(projectPath);
 
   // --------------------------------
   // Get scripts
@@ -59,8 +58,7 @@ export function analyzeDependencies(
   // Get configuration files
   // --------------------------------
 
-  const configCode =
-    readConfigFiles(projectPath);
+  const configCode = readConfigFiles(projectPath);
 
   const searchableContent = [
     sourceCode,
@@ -74,9 +72,7 @@ export function analyzeDependencies(
 
   const unusedDependencies: string[] = [];
 
-  for (const dependency of Object.keys(
-    dependencies,
-  )) {
+  for (const dependency of Object.keys(dependencies)) {
     if (
       !isDependencyUsed(
         dependency,
@@ -106,9 +102,30 @@ export function analyzeDependencies(
     }
   }
 
+  // --------------------------------
+  // Analyze missing dependencies
+  // --------------------------------
+
+  const installedDependencies = new Set([
+    ...Object.keys(dependencies),
+    ...Object.keys(devDependencies),
+  ]);
+
+  const importedPackages =
+    extractImportedPackages(sourceCode);
+
+  const missingDependencies: string[] = [];
+
+  for (const packageName of importedPackages) {
+    if (!installedDependencies.has(packageName)) {
+      missingDependencies.push(packageName);
+    }
+  }
+
   return {
     unusedDependencies,
     unusedDevDependencies,
+    missingDependencies,
   };
 }
 
@@ -143,11 +160,50 @@ function isDependencyUsed(
     `(^|[^a-zA-Z0-9_-])${escapedDependency}([^a-zA-Z0-9_-]|$)`,
   );
 
-  if (packagePattern.test(content)) {
-    return true;
+  return packagePattern.test(content);
+}
+
+// --------------------------------
+// Extract imported packages
+// --------------------------------
+
+function extractImportedPackages(
+  sourceCode: string,
+): string[] {
+  const packages = new Set<string>();
+
+  const importPattern =
+    /(?:import\s+(?:[\s\S]*?\s+from\s+)?|require\s*\(\s*|import\s*\(\s*)["']([^"']+)["']/g;
+
+  let match: RegExpExecArray | null;
+
+  while ((match = importPattern.exec(sourceCode)) !== null) {
+    const imported = match[1];
+
+    // Ignore relative imports
+    if (
+      imported.startsWith(".") ||
+      imported.startsWith("/")
+    ) {
+      continue;
+    }
+
+    // Ignore Node.js built-in modules
+    if (
+      imported.startsWith("node:")
+    ) {
+      continue;
+    }
+
+    // Get package root
+    const packageName = imported.startsWith("@")
+      ? imported.split("/").slice(0, 2).join("/")
+      : imported.split("/")[0];
+
+    packages.add(packageName);
   }
 
-  return false;
+  return [...packages];
 }
 
 // --------------------------------
@@ -321,4 +377,3 @@ function escapeRegExp(
     "\\$&",
   );
 }
-

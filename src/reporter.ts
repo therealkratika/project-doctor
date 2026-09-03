@@ -30,6 +30,7 @@ interface ReporterData {
   dependencyAnalysis: {
     unusedDependencies: string[];
     unusedDevDependencies: string[];
+    missingDependencies: string[];
   };
 
   securityAnalysis: {
@@ -189,13 +190,15 @@ export function printReport(data: ReporterData): void {
     chalk.bold("\n🔍 Dependency Analysis"),
   );
 
+  // --------------------------------
   // Production dependencies
+  // --------------------------------
 
   console.log("\n   Production:");
 
   if (
-    dependencyAnalysis.unusedDependencies
-      .length === 0
+    dependencyAnalysis.unusedDependencies.length ===
+    0
   ) {
     console.log(
       chalk.green(
@@ -221,7 +224,9 @@ export function printReport(data: ReporterData): void {
     }
   }
 
+  // --------------------------------
   // Development dependencies
+  // --------------------------------
 
   console.log("\n   Development:");
 
@@ -248,6 +253,40 @@ export function printReport(data: ReporterData): void {
       console.log(
         chalk.yellow(
           `   ⚠ ${dependency}`,
+        ),
+      );
+    }
+  }
+
+  // --------------------------------
+  // Missing dependencies
+  // --------------------------------
+
+  console.log("\n   Missing:");
+
+  if (
+    dependencyAnalysis.missingDependencies.length ===
+    0
+  ) {
+    console.log(
+      chalk.green(
+        "   ✓ No missing dependencies detected",
+      ),
+    );
+  } else {
+    console.log(
+      chalk.red(
+        "   ❌ Missing dependencies:",
+      ),
+    );
+
+    for (
+      const dependency of
+      dependencyAnalysis.missingDependencies
+    ) {
+      console.log(
+        chalk.red(
+          `   ❌ ${dependency}`,
         ),
       );
     }
@@ -344,15 +383,76 @@ export function printReport(data: ReporterData): void {
       (check) => !check.passed,
     );
 
-  if (failedChecks.length > 0) {
+  const hasDependencyIssues =
+    dependencyAnalysis.unusedDependencies.length >
+      0 ||
+    dependencyAnalysis.unusedDevDependencies.length >
+      0 ||
+    dependencyAnalysis.missingDependencies.length >
+      0;
+
+  const hasSecurityIssues =
+    securityAnalysis.total > 0;
+
+  if (
+    failedChecks.length > 0 ||
+    hasDependencyIssues ||
+    hasSecurityIssues
+  ) {
     console.log(
       chalk.bold("\n⚠ Issues"),
     );
 
+    // Project check issues
     for (const check of failedChecks) {
       console.log(
         chalk.yellow(
           `   • ${check.message}`,
+        ),
+      );
+    }
+
+    // Unused production dependencies
+    for (
+      const dependency of
+      dependencyAnalysis.unusedDependencies
+    ) {
+      console.log(
+        chalk.yellow(
+          `   • Potentially unused dependency: ${dependency}`,
+        ),
+      );
+    }
+
+    // Unused development dependencies
+    for (
+      const dependency of
+      dependencyAnalysis.unusedDevDependencies
+    ) {
+      console.log(
+        chalk.yellow(
+          `   • Potentially unused devDependency: ${dependency}`,
+        ),
+      );
+    }
+
+    // Missing dependencies
+    for (
+      const dependency of
+      dependencyAnalysis.missingDependencies
+    ) {
+      console.log(
+        chalk.red(
+          `   • Missing dependency: ${dependency}`,
+        ),
+      );
+    }
+
+    // Security issues
+    if (securityAnalysis.total > 0) {
+      console.log(
+        chalk.red(
+          `   • ${securityAnalysis.total} security vulnerabilities detected`,
         ),
       );
     }
@@ -367,7 +467,9 @@ export function printReport(data: ReporterData): void {
       chalk.bold("\n💡 Recommendations"),
     );
 
-    for (const recommendation of recommendations) {
+    for (
+      const recommendation of recommendations
+    ) {
       if (
         recommendation.type === "warning"
       ) {
@@ -403,7 +505,7 @@ export function printReport(data: ReporterData): void {
   }
 
   // --------------------------------
-  // Fixes
+  // Fixes Applied
   // --------------------------------
 
   const appliedFixes =

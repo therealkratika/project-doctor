@@ -219,19 +219,11 @@ program
       fixes: fixResults,
     };
 
-    // --------------------------------
-    // Generate report
-    // --------------------------------
-
     if (options.json) {
       printJsonReport(reportData);
     } else {
       printReport(reportData);
     }
   });
-
-// --------------------------------
-// Start CLI
-// --------------------------------
 
 program.parse();

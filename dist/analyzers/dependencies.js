@@ -54,9 +54,24 @@ export function analyzeDependencies(dependencies, devDependencies) {
             unusedDevDependencies.push(dependency);
         }
     }
+    // --------------------------------
+    // Analyze missing dependencies
+    // --------------------------------
+    const installedDependencies = new Set([
+        ...Object.keys(dependencies),
+        ...Object.keys(devDependencies),
+    ]);
+    const importedPackages = extractImportedPackages(sourceCode);
+    const missingDependencies = [];
+    for (const packageName of importedPackages) {
+        if (!installedDependencies.has(packageName)) {
+            missingDependencies.push(packageName);
+        }
+    }
     return {
         unusedDependencies,
         unusedDevDependencies,
+        missingDependencies,
     };
 }
 // --------------------------------
@@ -75,10 +90,33 @@ function isDependencyUsed(dependency, content) {
     // Package name inside commands/config
     // --------------------------------
     const packagePattern = new RegExp(`(^|[^a-zA-Z0-9_-])${escapedDependency}([^a-zA-Z0-9_-]|$)`);
-    if (packagePattern.test(content)) {
-        return true;
+    return packagePattern.test(content);
+}
+// --------------------------------
+// Extract imported packages
+// --------------------------------
+function extractImportedPackages(sourceCode) {
+    const packages = new Set();
+    const importPattern = /(?:import\s+(?:[\s\S]*?\s+from\s+)?|require\s*\(\s*|import\s*\(\s*)["']([^"']+)["']/g;
+    let match;
+    while ((match = importPattern.exec(sourceCode)) !== null) {
+        const imported = match[1];
+        // Ignore relative imports
+        if (imported.startsWith(".") ||
+            imported.startsWith("/")) {
+            continue;
+        }
+        // Ignore Node.js built-in modules
+        if (imported.startsWith("node:")) {
+            continue;
+        }
+        // Get package root
+        const packageName = imported.startsWith("@")
+            ? imported.split("/").slice(0, 2).join("/")
+            : imported.split("/")[0];
+        packages.add(packageName);
     }
-    return false;
+    return [...packages];
 }
 // --------------------------------
 // Read package.json
