@@ -2,9 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 export function analyzeDependencies(dependencies, devDependencies) {
     const projectPath = process.cwd();
-    // --------------------------------
-    // Get project files
-    // --------------------------------
     const files = getProjectFiles(projectPath);
     // --------------------------------
     // Read source files
@@ -12,8 +9,7 @@ export function analyzeDependencies(dependencies, devDependencies) {
     let sourceCode = "";
     for (const file of files) {
         try {
-            sourceCode +=
-                fs.readFileSync(file, "utf-8") + "\n";
+            sourceCode += fs.readFileSync(file, "utf-8") + "\n";
         }
         catch {
             // Ignore unreadable files
@@ -46,10 +42,28 @@ export function analyzeDependencies(dependencies, devDependencies) {
         }
     }
     // --------------------------------
-    // Analyze dev dependencies
+    // Analyze development dependencies
     // --------------------------------
     const unusedDevDependencies = [];
     for (const dependency of Object.keys(devDependencies)) {
+        /*
+         * @types/node is special.
+         *
+         * Node type definitions can be used automatically by
+         * TypeScript without an explicit import of "@types/node".
+         *
+         * If the project uses Node APIs such as:
+         *   node:fs
+         *   node:path
+         *   process
+         *   __dirname
+         *
+         * we consider @types/node to be used.
+         */
+        if (dependency === "@types/node" &&
+            usesNodeTypes(sourceCode, configCode)) {
+            continue;
+        }
         if (!isDependencyUsed(dependency, searchableContent)) {
             unusedDevDependencies.push(dependency);
         }
@@ -80,26 +94,56 @@ export function analyzeDependencies(dependencies, devDependencies) {
 function isDependencyUsed(dependency, content) {
     const escapedDependency = escapeRegExp(dependency);
     // --------------------------------
-    // Import
+    // ES module imports
     // --------------------------------
     const importPattern = new RegExp(`(?:from\\s+|import\\s*\\(?\\s*|require\\(\\s*)["']${escapedDependency}(?:/[^"']*)?["']`);
     if (importPattern.test(content)) {
         return true;
     }
     // --------------------------------
-    // Package name inside commands/config
+    // Package name inside scripts/config
     // --------------------------------
     const packagePattern = new RegExp(`(^|[^a-zA-Z0-9_-])${escapedDependency}([^a-zA-Z0-9_-]|$)`);
     return packagePattern.test(content);
 }
 // --------------------------------
-// Extract imported packages
+// Check whether Node types are used
 // --------------------------------
+function usesNodeTypes(sourceCode, configCode) {
+    // Node built-in imports
+    const nodeImportPattern = /(?:from\s+|import\s*\(\s*|require\(\s*)["']node:[^"']+["']/;
+    if (nodeImportPattern.test(sourceCode)) {
+        return true;
+    }
+    // Common Node globals
+    const nodeGlobalPattern = /\b(process|Buffer|__dirname|__filename|global|setImmediate)\b/;
+    if (nodeGlobalPattern.test(sourceCode)) {
+        return true;
+    }
+    // tsconfig explicitly references Node types
+    const nodeTypesPattern = /["']node["']/;
+    if (nodeTypesPattern.test(configCode)) {
+        return true;
+    }
+    return false;
+}
 function extractImportedPackages(sourceCode) {
     const packages = new Set();
+    // Remove comments before analyzing imports.
+    const codeWithoutComments = sourceCode
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/(^|[^:])\/\/.*$/gm, "$1");
+    // Matches:
+    //
+    // import x from "package"
+    // import { x } from "package"
+    // import "package"
+    // import("package")
+    // require("package")
+    //
     const importPattern = /(?:import\s+(?:[\s\S]*?\s+from\s+)?|require\s*\(\s*|import\s*\(\s*)["']([^"']+)["']/g;
     let match;
-    while ((match = importPattern.exec(sourceCode)) !== null) {
+    while ((match = importPattern.exec(codeWithoutComments)) !== null) {
         const imported = match[1];
         // Ignore relative imports
         if (imported.startsWith(".") ||
@@ -110,13 +154,82 @@ function extractImportedPackages(sourceCode) {
         if (imported.startsWith("node:")) {
             continue;
         }
-        // Get package root
+        // Ignore normal Node.js built-in modules
+        if (isNodeBuiltin(imported)) {
+            continue;
+        }
+        // Get package root.
+        //
+        // @scope/package/subpath
+        //        ↓
+        // @scope/package
+        //
+        // package/subpath
+        // ↓
+        // package
         const packageName = imported.startsWith("@")
             ? imported.split("/").slice(0, 2).join("/")
             : imported.split("/")[0];
         packages.add(packageName);
     }
     return [...packages];
+}
+function isNodeBuiltin(packageName) {
+    const builtins = new Set([
+        "assert",
+        "assert/strict",
+        "async_hooks",
+        "buffer",
+        "child_process",
+        "cluster",
+        "console",
+        "constants",
+        "crypto",
+        "dgram",
+        "diagnostics_channel",
+        "dns",
+        "dns/promises",
+        "domain",
+        "events",
+        "fs",
+        "fs/promises",
+        "http",
+        "http2",
+        "https",
+        "module",
+        "net",
+        "os",
+        "path",
+        "path/posix",
+        "path/win32",
+        "perf_hooks",
+        "process",
+        "punycode",
+        "querystring",
+        "readline",
+        "readline/promises",
+        "repl",
+        "stream",
+        "stream/consumers",
+        "stream/promises",
+        "stream/web",
+        "string_decoder",
+        "sys",
+        "timers",
+        "timers/promises",
+        "tls",
+        "trace_events",
+        "tty",
+        "url",
+        "util",
+        "util/types",
+        "v8",
+        "vm",
+        "wasi",
+        "worker_threads",
+        "zlib",
+    ]);
+    return builtins.has(packageName);
 }
 // --------------------------------
 // Read package.json
@@ -208,11 +321,18 @@ function getProjectFiles(directory) {
         }
         for (const entry of entries) {
             const fullPath = path.join(currentDirectory, entry.name);
-            if (entry.isDirectory() &&
-                !ignoredDirectories.has(entry.name)) {
-                walk(fullPath);
+            // --------------------------------
+            // Directories
+            // --------------------------------
+            if (entry.isDirectory()) {
+                if (!ignoredDirectories.has(entry.name)) {
+                    walk(fullPath);
+                }
                 continue;
             }
+            // --------------------------------
+            // Files
+            // --------------------------------
             if (!entry.isFile()) {
                 continue;
             }
@@ -224,9 +344,6 @@ function getProjectFiles(directory) {
     walk(directory);
     return files;
 }
-// --------------------------------
-// Escape regular expression
-// --------------------------------
 function escapeRegExp(value) {
     return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

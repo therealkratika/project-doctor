@@ -200,15 +200,15 @@ function usesNodeTypes(
 
   return false;
 }
-
-// --------------------------------
-// Extract imported packages
-// --------------------------------
-
 function extractImportedPackages(
   sourceCode: string,
 ): string[] {
   const packages = new Set<string>();
+
+  // Remove comments before analyzing imports.
+  const codeWithoutComments = sourceCode
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:])\/\/.*$/gm, "$1");
 
   // Matches:
   //
@@ -224,14 +224,11 @@ function extractImportedPackages(
   let match: RegExpExecArray | null;
 
   while (
-    (match = importPattern.exec(sourceCode)) !== null
+    (match = importPattern.exec(codeWithoutComments)) !== null
   ) {
     const imported = match[1];
 
-    // --------------------------------
     // Ignore relative imports
-    // --------------------------------
-
     if (
       imported.startsWith(".") ||
       imported.startsWith("/")
@@ -239,26 +236,25 @@ function extractImportedPackages(
       continue;
     }
 
-    // --------------------------------
     // Ignore Node.js built-in modules
-    // --------------------------------
-
     if (imported.startsWith("node:")) {
       continue;
     }
 
-    // --------------------------------
-    // Ignore built-in Node modules without node:
-    // --------------------------------
-
+    // Ignore normal Node.js built-in modules
     if (isNodeBuiltin(imported)) {
       continue;
     }
 
-    // --------------------------------
-    // Get package root
-    // --------------------------------
-
+    // Get package root.
+    //
+    // @scope/package/subpath
+    //        ↓
+    // @scope/package
+    //
+    // package/subpath
+    // ↓
+    // package
     const packageName = imported.startsWith("@")
       ? imported.split("/").slice(0, 2).join("/")
       : imported.split("/")[0];
@@ -268,10 +264,6 @@ function extractImportedPackages(
 
   return [...packages];
 }
-
-// --------------------------------
-// Node.js built-in modules
-// --------------------------------
 
 function isNodeBuiltin(
   packageName: string,
@@ -506,10 +498,6 @@ function getProjectFiles(
 
   return files;
 }
-
-// --------------------------------
-// Escape regular expression
-// --------------------------------
 
 function escapeRegExp(
   value: string,
