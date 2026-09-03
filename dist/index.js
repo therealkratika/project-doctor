@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
+import { runFixes } from "./fixers.js";
 import { analyzeProject } from "./analyzers/project.js";
 import { analyzePackage } from "./analyzers/package.js";
 import { analyzeDependencies } from "./analyzers/dependencies.js";
@@ -18,17 +19,32 @@ program
     .command("doctor")
     .description("Check the health of your project")
     .option("--json", "Output results as JSON")
+    .option("--fix", "Automatically fix safe issues")
     .action((options) => {
     // --------------------------------
     // Project analysis
     // --------------------------------
     const project = analyzeProject();
     // --------------------------------
+    // Apply safe fixes
+    // --------------------------------
+    if (options.fix) {
+        const fixes = runFixes();
+        console.log("🔧 Applying safe fixes...\n");
+        for (const fix of fixes) {
+            if (fix.fixed) {
+                console.log(`   ✓ ${fix.message}`);
+            }
+            else {
+                console.log(`   ℹ ${fix.message}`);
+            }
+        }
+        console.log();
+    }
+    // --------------------------------
     // Package analysis
     // --------------------------------
     const packageJson = analyzePackage();
-    // We need package.json for the remaining
-    // dependency-based analysis.
     if (!packageJson) {
         console.log("⚠️ No package.json found");
         return;
@@ -58,7 +74,7 @@ program
         vulnerabilities: securityAnalysis.vulnerabilities,
     });
     // --------------------------------
-    // Generate terminal report
+    // Collect report data
     // --------------------------------
     const reportData = {
         project,
@@ -69,6 +85,9 @@ program
         securityAnalysis,
         health,
     };
+    // --------------------------------
+    // Generate report
+    // --------------------------------
     if (options.json) {
         printJsonReport(reportData);
     }

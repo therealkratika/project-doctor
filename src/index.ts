@@ -2,6 +2,7 @@
 
 import { Command } from "commander";
 
+import { runFixes } from "./fixers.js";
 import { analyzeProject } from "./analyzers/project.js";
 import { analyzePackage } from "./analyzers/package.js";
 import { analyzeDependencies } from "./analyzers/dependencies.js";
@@ -9,6 +10,7 @@ import { analyzeSecurity } from "./analyzers/security.js";
 import { calculateHealth } from "./analyzers/health.js";
 import { runProjectChecks } from "./analyzers/checks.js";
 import { analyzeTechnology } from "./analyzers/technology.js";
+
 import { printReport } from "./reporter.js";
 import { printJsonReport } from "./json-reporter.js";
 
@@ -23,6 +25,7 @@ program
   .command("doctor")
   .description("Check the health of your project")
   .option("--json", "Output results as JSON")
+  .option("--fix", "Automatically fix safe issues")
   .action((options) => {
     // --------------------------------
     // Project analysis
@@ -31,13 +34,31 @@ program
     const project = analyzeProject();
 
     // --------------------------------
+    // Apply safe fixes
+    // --------------------------------
+
+    if (options.fix) {
+      const fixes = runFixes();
+
+      console.log("🔧 Applying safe fixes...\n");
+
+      for (const fix of fixes) {
+        if (fix.fixed) {
+          console.log(`   ✓ ${fix.message}`);
+        } else {
+          console.log(`   ℹ ${fix.message}`);
+        }
+      }
+
+      console.log();
+    }
+
+    // --------------------------------
     // Package analysis
     // --------------------------------
 
     const packageJson = analyzePackage();
 
-    // We need package.json for the remaining
-    // dependency-based analysis.
     if (!packageJson) {
       console.log("⚠️ No package.json found");
       return;
@@ -89,24 +110,29 @@ program
     });
 
     // --------------------------------
-    // Generate terminal report
+    // Collect report data
     // --------------------------------
 
     const reportData = {
-  project,
-  packageJson,
-  technology,
-  projectChecks,
-  dependencyAnalysis,
-  securityAnalysis,
-  health,
-};
+      project,
+      packageJson,
+      technology,
+      projectChecks,
+      dependencyAnalysis,
+      securityAnalysis,
+      health,
+    };
 
-if (options.json) {
-  printJsonReport(reportData);
-} else {
-  printReport(reportData);
-}
+    // --------------------------------
+    // Generate report
+    // --------------------------------
+
+    if (options.json) {
+      printJsonReport(reportData);
+    } else {
+      printReport(reportData);
+    }
   });
 
 program.parse();
+
