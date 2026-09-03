@@ -7,122 +7,103 @@ export interface FixResult {
   message: string;
 }
 
-export function runFixes(): FixResult[] {
+export function getAvailableFixes(): string[] {
   const projectPath = process.cwd();
 
-  const results: FixResult[] = [];
+  const fixes: string[] = [];
 
-  // --------------------------------
-  // Fix README
-  // --------------------------------
-
-  const readmePath = path.join(
-    projectPath,
-    "README.md",
-  );
+  const readmePath = path.join(projectPath, "README.md");
 
   if (!fs.existsSync(readmePath)) {
-    const projectName =
-      path.basename(projectPath);
-
-    const readmeContent = `# ${projectName}
-
-## Description
-
-This project was analyzed by Project Doctor.
-
-## Installation
-
-\`\`\`bash
-npm install
-\`\`\`
-
-## Development
-
-\`\`\`bash
-npm run dev
-\`\`\`
-
-## Build
-
-\`\`\`bash
-npm run build
-\`\`\`
-`;
-
-    try {
-      fs.writeFileSync(
-        readmePath,
-        readmeContent,
-        "utf-8",
-      );
-
-      results.push({
-        name: "README",
-        fixed: true,
-        message: "Created missing README.md",
-      });
-    } catch {
-      results.push({
-        name: "README",
-        fixed: false,
-        message: "Could not create README.md",
-      });
-    }
-  } else {
-    results.push({
-      name: "README",
-      fixed: false,
-      message: "README.md already exists",
-    });
+    fixes.push("README");
   }
 
-  // --------------------------------
-  // Fix .gitignore
-  // --------------------------------
-
-  const gitignorePath = path.join(
-    projectPath,
-    ".gitignore",
-  );
+  const gitignorePath = path.join(projectPath, ".gitignore");
 
   if (!fs.existsSync(gitignorePath)) {
-    const gitignoreContent = `node_modules/
-dist/
-build/
-.next/
-coverage/
-.env
-.env.local
-.DS_Store
-`;
-
-    try {
-      fs.writeFileSync(
-        gitignorePath,
-        gitignoreContent,
-        "utf-8",
-      );
-
-      results.push({
-        name: ".gitignore",
-        fixed: true,
-        message: "Created missing .gitignore",
-      });
-    } catch {
-      results.push({
-        name: ".gitignore",
-        fixed: false,
-        message: "Could not create .gitignore",
-      });
-    }
-  } else {
-    results.push({
-      name: ".gitignore",
-      fixed: false,
-      message: ".gitignore already exists",
-    });
+    fixes.push(".gitignore");
   }
 
-  return results;
+  return fixes;
 }
+
+export function runFix(
+  fixName: string,
+): FixResult {
+  const projectPath = process.cwd();
+
+  // --------------------------------
+  // README
+  // --------------------------------
+
+  if (fixName === "README") {
+    const readmePath = path.join(
+      projectPath,
+      "README.md",
+    );
+
+    if (fs.existsSync(readmePath)) {
+      return {
+        name: "README",
+        fixed: false,
+        message: "README.md already exists",
+      };
+    }
+
+    fs.writeFileSync(
+      readmePath,
+      "# Project\n\nThis project was analyzed by Project Doctor.\n",
+    );
+
+    return {
+      name: "README",
+      fixed: true,
+      message: "Created README.md",
+    };
+  }
+
+  // --------------------------------
+  // .gitignore
+  // --------------------------------
+
+  if (fixName === ".gitignore") {
+    const gitignorePath = path.join(
+      projectPath,
+      ".gitignore",
+    );
+
+    if (fs.existsSync(gitignorePath)) {
+      return {
+        name: ".gitignore",
+        fixed: false,
+        message: ".gitignore already exists",
+      };
+    }
+
+    fs.writeFileSync(
+      gitignorePath,
+      "node_modules/\ndist/\n.env\n.DS_Store\n",
+    );
+
+    return {
+      name: ".gitignore",
+      fixed: true,
+      message: "Created .gitignore",
+    };
+  }
+
+  return {
+    name: fixName,
+    fixed: false,
+    message: `Unknown fix: ${fixName}`,
+  };
+}
+
+export function runFixes(): FixResult[] {
+  const availableFixes = getAvailableFixes();
+
+  return availableFixes.map((fix) =>
+    runFix(fix),
+  );
+}
+

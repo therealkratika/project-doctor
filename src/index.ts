@@ -1,8 +1,14 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
+import inquirer from "inquirer";
 
-import { runFixes, type FixResult } from "./fixers.js";
+import {
+  getAvailableFixes,
+  runFix,
+  type FixResult,
+} from "./fixers.js";
+
 import { analyzeProject } from "./analyzers/project.js";
 import { analyzePackage } from "./analyzers/package.js";
 import { analyzeDependencies } from "./analyzers/dependencies.js";
@@ -10,7 +16,9 @@ import { analyzeSecurity } from "./analyzers/security.js";
 import { calculateHealth } from "./analyzers/health.js";
 import { runProjectChecks } from "./analyzers/checks.js";
 import { analyzeTechnology } from "./analyzers/technology.js";
+
 import { generateRecommendations } from "./recommendations.js";
+
 import { printReport } from "./reporter.js";
 import { printJsonReport } from "./json-reporter.js";
 
@@ -26,7 +34,7 @@ program
   .description("Check the health of your project")
   .option("--json", "Output results as JSON")
   .option("--fix", "Automatically fix safe issues")
-  .action((options) => {
+  .action(async (options) => {
     // --------------------------------
     // Project analysis
     // --------------------------------
@@ -40,22 +48,61 @@ program
     let fixResults: FixResult[] = [];
 
     if (options.fix) {
-      fixResults = runFixes();
+      const availableFixes = getAvailableFixes();
 
-      // Don't print fix messages when
-      // JSON output is requested.
-      if (!options.json) {
-        console.log("🔧 Applying safe fixes...\n");
-
-        for (const fix of fixResults) {
-          if (fix.fixed) {
-            console.log(`   ✓ ${fix.message}`);
-          } else {
-            console.log(`   ℹ ${fix.message}`);
-          }
+      // No fixes available
+      if (availableFixes.length === 0) {
+        if (!options.json) {
+          console.log("🔧 Fixes");
+          console.log("   ✓ No safe fixes available");
+          console.log();
         }
+      }
 
-        console.log();
+      // JSON mode
+      else if (options.json) {
+        // Never show interactive prompts in JSON mode.
+        fixResults = availableFixes.map((fix) => runFix(fix));
+      }
+
+      // Interactive terminal mode
+      else {
+        console.log("🔧 Safe Fixes\n");
+
+        const answer = await inquirer.prompt<{
+          fixes: string[];
+        }>([
+          {
+            type: "checkbox",
+            name: "fixes",
+            message: "Select fixes to apply:",
+            choices: availableFixes.map((fix) => ({
+              name: fix,
+              value: fix,
+              checked: true,
+            })),
+          },
+        ]);
+
+        if (answer.fixes.length === 0) {
+          console.log("\n   ℹ No fixes selected\n");
+        } else {
+          console.log("\n🔧 Applying fixes...\n");
+
+          for (const fix of answer.fixes) {
+            const result = runFix(fix);
+
+            fixResults.push(result);
+
+            if (result.fixed) {
+              console.log(`   ✓ ${result.message}`);
+            } else {
+              console.log(`   ℹ ${result.message}`);
+            }
+          }
+
+          console.log();
+        }
       }
     }
 
@@ -136,37 +183,41 @@ program
 
       failedChecks,
     });
-    const recommendations =
-  generateRecommendations({
-    projectChecks,
-
-    unusedDependencies:
-      dependencyAnalysis.unusedDependencies,
-
-    unusedDevDependencies:
-      dependencyAnalysis.unusedDevDependencies,
-
-    vulnerabilities:
-      securityAnalysis.vulnerabilities,
-
-    healthScore: health.score,
-  });
 
     // --------------------------------
-    // Collect report data
+    // Recommendations
+    // --------------------------------
+
+    const recommendations = generateRecommendations({
+      projectChecks,
+
+      unusedDependencies:
+        dependencyAnalysis.unusedDependencies,
+
+      unusedDevDependencies:
+        dependencyAnalysis.unusedDevDependencies,
+
+      vulnerabilities:
+        securityAnalysis.vulnerabilities,
+
+      healthScore: health.score,
+    });
+
+    // --------------------------------
+    // Report data
     // --------------------------------
 
     const reportData = {
-  project,
-  packageJson,
-  technology,
-  projectChecks,
-  dependencyAnalysis,
-  securityAnalysis,
-  health,
-  recommendations,
-  fixes: fixResults,
-};
+      project,
+      packageJson,
+      technology,
+      projectChecks,
+      dependencyAnalysis,
+      securityAnalysis,
+      health,
+      recommendations,
+      fixes: fixResults,
+    };
 
     // --------------------------------
     // Generate report
@@ -179,5 +230,8 @@ program
     }
   });
 
-program.parse();
+// --------------------------------
+// Start CLI
+// --------------------------------
 
+program.parse();

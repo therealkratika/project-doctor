@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { runFixes } from "./fixers.js";
+import inquirer from "inquirer";
+import { getAvailableFixes, runFix, } from "./fixers.js";
 import { analyzeProject } from "./analyzers/project.js";
 import { analyzePackage } from "./analyzers/package.js";
 import { analyzeDependencies } from "./analyzers/dependencies.js";
@@ -21,7 +22,7 @@ program
     .description("Check the health of your project")
     .option("--json", "Output results as JSON")
     .option("--fix", "Automatically fix safe issues")
-    .action((options) => {
+    .action(async (options) => {
     // --------------------------------
     // Project analysis
     // --------------------------------
@@ -31,20 +32,52 @@ program
     // --------------------------------
     let fixResults = [];
     if (options.fix) {
-        fixResults = runFixes();
-        // Don't print fix messages when
-        // JSON output is requested.
-        if (!options.json) {
-            console.log("🔧 Applying safe fixes...\n");
-            for (const fix of fixResults) {
-                if (fix.fixed) {
-                    console.log(`   ✓ ${fix.message}`);
-                }
-                else {
-                    console.log(`   ℹ ${fix.message}`);
-                }
+        const availableFixes = getAvailableFixes();
+        // No fixes available
+        if (availableFixes.length === 0) {
+            if (!options.json) {
+                console.log("🔧 Fixes");
+                console.log("   ✓ No safe fixes available");
+                console.log();
             }
-            console.log();
+        }
+        // JSON mode
+        else if (options.json) {
+            // Never show interactive prompts in JSON mode.
+            fixResults = availableFixes.map((fix) => runFix(fix));
+        }
+        // Interactive terminal mode
+        else {
+            console.log("🔧 Safe Fixes\n");
+            const answer = await inquirer.prompt([
+                {
+                    type: "checkbox",
+                    name: "fixes",
+                    message: "Select fixes to apply:",
+                    choices: availableFixes.map((fix) => ({
+                        name: fix,
+                        value: fix,
+                        checked: true,
+                    })),
+                },
+            ]);
+            if (answer.fixes.length === 0) {
+                console.log("\n   ℹ No fixes selected\n");
+            }
+            else {
+                console.log("\n🔧 Applying fixes...\n");
+                for (const fix of answer.fixes) {
+                    const result = runFix(fix);
+                    fixResults.push(result);
+                    if (result.fixed) {
+                        console.log(`   ✓ ${result.message}`);
+                    }
+                    else {
+                        console.log(`   ℹ ${result.message}`);
+                    }
+                }
+                console.log();
+            }
         }
     }
     // --------------------------------
@@ -91,6 +124,9 @@ program
         vulnerabilities: securityAnalysis.vulnerabilities,
         failedChecks,
     });
+    // --------------------------------
+    // Recommendations
+    // --------------------------------
     const recommendations = generateRecommendations({
         projectChecks,
         unusedDependencies: dependencyAnalysis.unusedDependencies,
@@ -99,7 +135,7 @@ program
         healthScore: health.score,
     });
     // --------------------------------
-    // Collect report data
+    // Report data
     // --------------------------------
     const reportData = {
         project,
@@ -122,4 +158,7 @@ program
         printReport(reportData);
     }
 });
+// --------------------------------
+// Start CLI
+// --------------------------------
 program.parse();

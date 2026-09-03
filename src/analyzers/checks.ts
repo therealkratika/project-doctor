@@ -12,10 +12,6 @@ export function runProjectChecks(): ProjectCheck[] {
 
   const checks: ProjectCheck[] = [];
 
-  // --------------------------------
-  // package.json
-  // --------------------------------
-
   const packageJsonPath = path.join(
     projectPath,
     "package.json",
@@ -32,11 +28,6 @@ export function runProjectChecks(): ProjectCheck[] {
       ? "package.json found"
       : "package.json is missing",
   });
-
-  // --------------------------------
-  // If package.json doesn't exist,
-  // skip package-dependent checks
-  // --------------------------------
 
   let packageJson: {
     scripts?: Record<string, string>;
@@ -59,10 +50,6 @@ export function runProjectChecks(): ProjectCheck[] {
     }
   }
 
-  // --------------------------------
-  // README
-  // --------------------------------
-
   const readmePath = path.join(
     projectPath,
     "README.md",
@@ -77,11 +64,6 @@ export function runProjectChecks(): ProjectCheck[] {
       ? "README.md found"
       : "README.md is missing",
   });
-
-  // --------------------------------
-  // .gitignore
-  // --------------------------------
-
   const gitignorePath = path.join(
     projectPath,
     ".gitignore",
@@ -99,10 +81,6 @@ export function runProjectChecks(): ProjectCheck[] {
       : ".gitignore is missing",
   });
 
-  // --------------------------------
-  // Git repository
-  // --------------------------------
-
   const gitPath = path.join(
     projectPath,
     ".git",
@@ -117,10 +95,6 @@ export function runProjectChecks(): ProjectCheck[] {
       ? "Git repository detected"
       : "Git repository not detected",
   });
-
-  // --------------------------------
-  // Lockfile
-  // --------------------------------
 
   const lockfiles = [
     "package-lock.json",

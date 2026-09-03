@@ -3,9 +3,6 @@ import path from "node:path";
 export function runProjectChecks() {
     const projectPath = process.cwd();
     const checks = [];
-    // --------------------------------
-    // package.json
-    // --------------------------------
     const packageJsonPath = path.join(projectPath, "package.json");
     const hasPackageJson = fs.existsSync(packageJsonPath);
     checks.push({
@@ -15,10 +12,6 @@ export function runProjectChecks() {
             ? "package.json found"
             : "package.json is missing",
     });
-    // --------------------------------
-    // If package.json doesn't exist,
-    // skip package-dependent checks
-    // --------------------------------
     let packageJson = null;
     if (hasPackageJson) {
         try {
@@ -33,9 +26,6 @@ export function runProjectChecks() {
             });
         }
     }
-    // --------------------------------
-    // README
-    // --------------------------------
     const readmePath = path.join(projectPath, "README.md");
     const hasReadme = fs.existsSync(readmePath);
     checks.push({
@@ -45,9 +35,6 @@ export function runProjectChecks() {
             ? "README.md found"
             : "README.md is missing",
     });
-    // --------------------------------
-    // .gitignore
-    // --------------------------------
     const gitignorePath = path.join(projectPath, ".gitignore");
     const hasGitignore = fs.existsSync(gitignorePath);
     checks.push({
@@ -57,9 +44,6 @@ export function runProjectChecks() {
             ? ".gitignore found"
             : ".gitignore is missing",
     });
-    // --------------------------------
-    // Git repository
-    // --------------------------------
     const gitPath = path.join(projectPath, ".git");
     const hasGit = fs.existsSync(gitPath);
     checks.push({
@@ -69,9 +53,6 @@ export function runProjectChecks() {
             ? "Git repository detected"
             : "Git repository not detected",
     });
-    // --------------------------------
-    // Lockfile
-    // --------------------------------
     const lockfiles = [
         "package-lock.json",
         "yarn.lock",
