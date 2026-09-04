@@ -95,15 +95,44 @@ export function runProjectChecks() {
             : "No test script found",
     });
     // --------------------------------
-    // Lint script
+    // Linting
     // --------------------------------
     const hasLintScript = Boolean(packageJson?.scripts?.lint);
+    const lintConfigFiles = [
+        "eslint.config.js",
+        "eslint.config.mjs",
+        "eslint.config.cjs",
+        ".eslintrc",
+        ".eslintrc.json",
+        ".eslintrc.js",
+        ".eslintrc.cjs",
+        ".eslintrc.yml",
+        ".eslintrc.yaml",
+    ];
+    const hasLintConfig = lintConfigFiles.some((file) => fs.existsSync(path.join(projectPath, file)));
+    const hasLintDependency = Boolean(packageJson?.dependencies?.eslint ||
+        packageJson?.devDependencies?.eslint);
+    const hasLinting = hasLintScript ||
+        hasLintConfig ||
+        hasLintDependency;
+    let lintMessage = "No linting configuration found";
+    if (hasLintScript && hasLintConfig) {
+        lintMessage =
+            "Lint script and ESLint configuration found";
+    }
+    else if (hasLintScript) {
+        lintMessage = "Lint script found";
+    }
+    else if (hasLintConfig) {
+        lintMessage = "ESLint configuration found";
+    }
+    else if (hasLintDependency) {
+        lintMessage = "ESLint dependency found";
+    }
     checks.push({
-        name: "lint-script",
-        passed: hasLintScript,
-        message: hasLintScript
-            ? "Lint script found"
-            : "No lint script found",
+        name: "linting",
+        passed: hasLinting,
+        message: lintMessage,
     });
     // --------------------------------
     // Detect TypeScript project
