@@ -7,10 +7,20 @@ export interface ProjectCheck {
   message: string;
 }
 
+interface PackageJson {
+  scripts?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  dependencies?: Record<string, string>;
+}
+
 export function runProjectChecks(): ProjectCheck[] {
   const projectPath = process.cwd();
 
   const checks: ProjectCheck[] = [];
+
+  // --------------------------------
+  // package.json
+  // --------------------------------
 
   const packageJsonPath = path.join(
     projectPath,
@@ -29,9 +39,7 @@ export function runProjectChecks(): ProjectCheck[] {
       : "package.json is missing",
   });
 
-  let packageJson: {
-    scripts?: Record<string, string>;
-  } | null = null;
+  let packageJson: PackageJson | null = null;
 
   if (hasPackageJson) {
     try {
@@ -50,6 +58,10 @@ export function runProjectChecks(): ProjectCheck[] {
     }
   }
 
+  // --------------------------------
+  // README
+  // --------------------------------
+
   const readmePath = path.join(
     projectPath,
     "README.md",
@@ -64,6 +76,11 @@ export function runProjectChecks(): ProjectCheck[] {
       ? "README.md found"
       : "README.md is missing",
   });
+
+  // --------------------------------
+  // .gitignore
+  // --------------------------------
+
   const gitignorePath = path.join(
     projectPath,
     ".gitignore",
@@ -81,6 +98,10 @@ export function runProjectChecks(): ProjectCheck[] {
       : ".gitignore is missing",
   });
 
+  // --------------------------------
+  // Git repository
+  // --------------------------------
+
   const gitPath = path.join(
     projectPath,
     ".git",
@@ -95,6 +116,10 @@ export function runProjectChecks(): ProjectCheck[] {
       ? "Git repository detected"
       : "Git repository not detected",
   });
+
+  // --------------------------------
+  // Lockfile
+  // --------------------------------
 
   const lockfiles = [
     "package-lock.json",
@@ -151,68 +176,163 @@ export function runProjectChecks(): ProjectCheck[] {
   });
 
   // --------------------------------
-  // TypeScript
+  // Detect TypeScript project
   // --------------------------------
 
-  const tsconfigPath = path.join(
-    projectPath,
-    "tsconfig.json",
+  const hasTsConfig = fs.existsSync(
+    path.join(projectPath, "tsconfig.json"),
   );
 
-  const hasTypeScriptConfig =
-    fs.existsSync(tsconfigPath);
+  const hasTypeScriptDependency =
+    Boolean(
+      packageJson?.dependencies?.typescript ||
+        packageJson?.devDependencies?.typescript,
+    );
 
-  checks.push({
-    name: "typescript",
-    passed: hasTypeScriptConfig,
-    message: hasTypeScriptConfig
-      ? "TypeScript configuration found"
-      : "TypeScript configuration not found",
-  });
+  const isTypeScriptProject =
+    hasTsConfig || hasTypeScriptDependency;
+
+  // Only check TypeScript configuration
+  // when the project actually uses TypeScript.
+  if (isTypeScriptProject) {
+    checks.push({
+      name: "typescript",
+      passed: hasTsConfig,
+      message: hasTsConfig
+        ? "TypeScript configuration found"
+        : "TypeScript project detected but tsconfig.json is missing",
+    });
+  }
 
   // --------------------------------
   // Environment file safety
   // --------------------------------
 
-  const envPath = path.join(
-    projectPath,
+  const envFiles = [
     ".env",
+    ".env.local",
+    ".env.development",
+    ".env.production",
+    ".env.test",
+  ];
+
+  const existingEnvFiles = envFiles.filter(
+    (file) =>
+      fs.existsSync(
+        path.join(projectPath, file),
+      ),
   );
 
-  const hasEnvFile = fs.existsSync(envPath);
+  if (existingEnvFiles.length > 0) {
+    let envIgnored = false;
 
-  let envIgnored = false;
+    if (hasGitignore) {
+      try {
+        const gitignoreContent =
+          fs.readFileSync(
+            gitignorePath,
+            "utf-8",
+          );
 
-  if (hasEnvFile && hasGitignore) {
-    try {
-      const gitignoreContent =
-        fs.readFileSync(
-          gitignorePath,
-          "utf-8",
+        const lines = gitignoreContent
+          .split(/\r?\n/)
+          .map((line: string) =>
+            line.trim(),
+          )
+          .filter(
+            (line: string) =>
+              line.length > 0 &&
+              !line.startsWith("#"),
+          );
+
+        envIgnored = existingEnvFiles.every(
+          (envFile) =>
+            isIgnoredByGitignore(
+              envFile,
+              lines,
+            ),
         );
-
-      const lines = gitignoreContent
-        .split(/\r?\n/)
-        .map((line) => line.trim());
-
-      envIgnored =
-        lines.includes(".env") ||
-        lines.includes(".env*");
-    } catch {
-      envIgnored = false;
+      } catch {
+        envIgnored = false;
+      }
     }
-  }
 
-  if (hasEnvFile) {
     checks.push({
       name: "env-safety",
       passed: envIgnored,
       message: envIgnored
-        ? ".env exists and is ignored by Git"
-        : ".env exists but may not be ignored by Git",
+        ? ".env files exist and are ignored by Git"
+        : ".env files exist but may not be ignored by Git",
     });
   }
 
   return checks;
+}
+
+// --------------------------------
+// Check .gitignore patterns
+// --------------------------------
+
+function isIgnoredByGitignore(
+  fileName: string,
+  patterns: string[],
+): boolean {
+  for (const pattern of patterns) {
+    const normalizedPattern = pattern
+      .replace(/^\/+/, "")
+      .replace(/\/+$/, "");
+
+    // Exact match
+    if (normalizedPattern === fileName) {
+      return true;
+    }
+
+    // .env*
+    if (
+      normalizedPattern === ".env*" &&
+      fileName.startsWith(".env")
+    ) {
+      return true;
+    }
+
+    // *.env
+    if (
+      normalizedPattern === "*.env" &&
+      fileName.endsWith(".env")
+    ) {
+      return true;
+    }
+
+    // Generic wildcard support
+    if (normalizedPattern.includes("*")) {
+      const regex = new RegExp(
+        "^" +
+          normalizedPattern
+            .split("*")
+            .map(escapeRegExp)
+            .join(".*") +
+          "$",
+      );
+
+      if (regex.test(fileName)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+// --------------------------------
+// Escape RegExp
+// --------------------------------
+
+function escapeRegExp(
+  value: string,
+): string {
+  return value.replace(
+    /[.*+?^${}()|[\]\\]/g,
+    "\\$&",
+  );
 }
 
